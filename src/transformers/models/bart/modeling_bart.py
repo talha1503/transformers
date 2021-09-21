@@ -22,7 +22,7 @@ from typing import Optional, Tuple
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from torch.nn import CrossEntropyLoss, MSELoss
+from torch.nn import CrossEntropyLoss, MSELoss,BCELoss
 
 from ...activations import ACT2FN
 from ...file_utils import (
@@ -420,6 +420,8 @@ class BartDecoderLayer(nn.Module):
             hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
             hidden_states = residual + hidden_states
             hidden_states = self.encoder_attn_layer_norm(hidden_states)
+            # Changes made here
+            attention_outputs = hidden_states
 
             # add cross-attn to positions 3,4 of present_key_value tuple
             present_key_value = present_key_value + cross_attn_present_key_value
@@ -441,7 +443,8 @@ class BartDecoderLayer(nn.Module):
         if use_cache:
             outputs += (present_key_value,)
 
-        return outputs
+        # Changes made here
+        return outputs,attention_outputs
 
 
 class BartClassificationHead(nn.Module):
@@ -888,6 +891,7 @@ class BartDecoder(BartPretrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        fame_vector = None # Changes made here
     ):
         r"""
         Args:
@@ -1035,8 +1039,8 @@ class BartDecoder(BartPretrainedModel):
                         return module(*inputs, output_attentions, use_cache)
 
                     return custom_forward
-
-                layer_outputs = torch.utils.checkpoint.checkpoint(
+                # Changes made here
+                layer_outputs,attention_outputs = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(decoder_layer),
                     hidden_states,
                     attention_mask,
@@ -1047,8 +1051,8 @@ class BartDecoder(BartPretrainedModel):
                     None,
                 )
             else:
-
-                layer_outputs = decoder_layer(
+                # Changes made here
+                layer_outputs,attention_outputs = decoder_layer(
                     hidden_states,
                     attention_mask=attention_mask,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1062,6 +1066,11 @@ class BartDecoder(BartPretrainedModel):
                     use_cache=use_cache,
                 )
             hidden_states = layer_outputs[0]
+            
+            # Changes made here
+            focus_bias = attention_outputs * fame_vector
+            focus_bias_mean = torch.mean(focus_bias,1)
+
 
             if use_cache:
                 next_decoder_cache += (layer_outputs[3 if output_attentions else 1],)
@@ -1089,8 +1098,25 @@ class BartDecoder(BartPretrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
             cross_attentions=all_cross_attentions,
+            focus_bias_vector = focus_bias_mean # Changes made here
         )
 
+
+# Changes made here
+class BartFame(nn.Module):
+    def __init__(self,embedding_layer):
+        self.fc1 = nn.Linear(1024,4096)
+        self.fc2 = nn.Linear(4096,1024)
+        self.embedding_layer = embedding_layer
+        self.embedding_layer_weights = self.embedding_layer.weight.clone().T
+
+    def forward(self,encoder_outputs):
+        fc1_output = self.fc1(encoder_outputs)
+        gelu_activated_output = nn.functional.gelu(fc1_output)
+        fc2_output = self.fc2(gelu_activated_output)
+        t_vector = torch.matmul(fc2_output,self.embedding_layer_weights)
+        tx = torch.mean(t_vector,1)
+        return t_vector, tx
 
 @add_start_docstrings(
     "The bare BART Model outputting raw hidden-states without any specific head on top.",
@@ -1104,6 +1130,7 @@ class BartModel(BartPretrainedModel):
         self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
 
         self.encoder = BartEncoder(config, self.shared)
+        self.fame = BartFame(self.shared)
         self.decoder = BartDecoder(config, self.shared)
 
         self.init_weights()
@@ -1180,6 +1207,9 @@ class BartModel(BartPretrainedModel):
                 attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
             )
 
+        # Changes made here
+        fame_vector,tx_vector = self.fame(encoder_outputs)
+
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
@@ -1194,6 +1224,7 @@ class BartModel(BartPretrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            fame_vector = fame_vector # Changes made here
         )
 
         if not return_dict:
@@ -1208,6 +1239,8 @@ class BartModel(BartPretrainedModel):
             encoder_last_hidden_state=encoder_outputs.last_hidden_state,
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
+            focus_bias_vector = decoder_outputs.focus_bias_vector # Changes made here
+            tx_vector = tx_vector # Changes made here
         )
 
 
@@ -1290,6 +1323,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                     labels, self.config.pad_token_id, self.config.decoder_start_token_id
                 )
 
+        # Changes made here
         outputs = self.model(
             input_ids,
             attention_mask=attention_mask,
@@ -1307,20 +1341,27 @@ class BartForConditionalGeneration(BartPretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+
         lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
+        # Changes made here
+        final_distribution = lm_logits + outputs.focus_bias_vector
 
         masked_lm_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
+            # Changes made here
+            topic_loss_fct = BCELoss() # Changes made here
+            masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
+            topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1)) # Changes made here
+            final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
 
         if not return_dict:
-            output = (lm_logits,) + outputs[1:]
-            return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
+            output = (final_distribution,) + outputs[1:] # Changes made here
+            return ((final_loss,) + output) if final_loss is not None else output
 
         return Seq2SeqLMOutput(
-            loss=masked_lm_loss,
-            logits=lm_logits,
+            loss=final_loss,
+            logits=final_distribution, # Changes made here
             past_key_values=outputs.past_key_values,
             decoder_hidden_states=outputs.decoder_hidden_states,
             decoder_attentions=outputs.decoder_attentions,

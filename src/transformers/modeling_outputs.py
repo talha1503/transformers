@@ -243,7 +243,7 @@ class BaseModelOutputWithPastAndCrossAttentions(ModelOutput):
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
     cross_attentions: Optional[Tuple[torch.FloatTensor]] = None
-
+    focus_bias_vector: Optional[Tuple[torch.FloatTensor]] = None # Changes made here
 
 @dataclass
 class Seq2SeqModelOutput(ModelOutput):
@@ -304,6 +304,8 @@ class Seq2SeqModelOutput(ModelOutput):
     encoder_last_hidden_state: Optional[torch.FloatTensor] = None
     encoder_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     encoder_attentions: Optional[Tuple[torch.FloatTensor]] = None
+    focus_bias_vector: Optional[Tuple[torch.FloatTensor]] = None # Changes made here
+    tx_vector: Optional[Tuple[torch.FloatTensor]] = None # Changes made here
 
 
 @dataclass
