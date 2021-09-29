@@ -257,7 +257,7 @@ class BartAttention(nn.Module):
 
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights_reshaped, past_key_value
+        return attn_output, attn_weights_reshaped, past_key_value, attn_probs
 
 
 class BartEncoderLayer(nn.Module):
@@ -296,7 +296,7 @@ class BartEncoderLayer(nn.Module):
                 returned tensors for more detail.
         """
         residual = hidden_states
-        hidden_states, attn_weights, _ = self.self_attn(
+        hidden_states, attn_weights, _, _ = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             layer_head_mask=layer_head_mask,
@@ -390,7 +390,7 @@ class BartDecoderLayer(nn.Module):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
         # add present self-attn cache to positions 1,2 of present_key_value tuple
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        hidden_states, self_attn_weights, present_key_value, _ = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_attn_past_key_value,
             attention_mask=attention_mask,
@@ -400,16 +400,16 @@ class BartDecoderLayer(nn.Module):
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
-
         # Cross-Attention Block
         cross_attn_present_key_value = None
         cross_attn_weights = None
         if encoder_hidden_states is not None:
+            print("--------------------I AM IN HERE-----------")
             residual = hidden_states
 
             # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
             cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
-            hidden_states, cross_attn_weights, cross_attn_present_key_value = self.encoder_attn(
+            hidden_states, cross_attn_weights, cross_attn_present_key_value, cross_attention_probs = self.encoder_attn(
                 hidden_states=hidden_states,
                 key_value_states=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
@@ -421,7 +421,8 @@ class BartDecoderLayer(nn.Module):
             hidden_states = residual + hidden_states
             hidden_states = self.encoder_attn_layer_norm(hidden_states)
             # Changes made here
-            attention_outputs = hidden_states
+            print("Cross attention weights: ",cross_attention_probs.size())
+            attention_outputs = cross_attention_probs[-2:]
 
             # add cross-attn to positions 3,4 of present_key_value tuple
             present_key_value = present_key_value + cross_attn_present_key_value
@@ -1077,6 +1078,8 @@ class BartDecoder(BartPretrainedModel):
                     all_cross_attentions += (layer_outputs[2],)
 
         # Changes made here
+        print("attention_outputs: ",attention_outputs.size())
+        print("Fame Vector: ",fame_vector.size())
         focus_bias = attention_outputs * fame_vector
         focus_bias_sum = torch.sum(focus_bias,1)
 
@@ -1104,6 +1107,7 @@ class BartDecoder(BartPretrainedModel):
 # Changes made here
 class BartFame(nn.Module):
     def __init__(self,embedding_layer):
+        super().__init__()
         self.fc1 = nn.Linear(1024,4096)
         self.fc2 = nn.Linear(4096,1024)
         self.embedding_layer = embedding_layer
