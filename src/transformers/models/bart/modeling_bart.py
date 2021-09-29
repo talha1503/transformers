@@ -1067,11 +1067,6 @@ class BartDecoder(BartPretrainedModel):
                 )
             hidden_states = layer_outputs[0]
             
-            # Changes made here
-            focus_bias = attention_outputs * fame_vector
-            focus_bias_mean = torch.mean(focus_bias,1)
-
-
             if use_cache:
                 next_decoder_cache += (layer_outputs[3 if output_attentions else 1],)
 
@@ -1080,6 +1075,10 @@ class BartDecoder(BartPretrainedModel):
 
                 if encoder_hidden_states is not None:
                     all_cross_attentions += (layer_outputs[2],)
+
+        # Changes made here
+        focus_bias = attention_outputs * fame_vector
+        focus_bias_sum = torch.sum(focus_bias,1)
 
         # add hidden states from the last decoder layer
         if output_hidden_states:
@@ -1098,7 +1097,7 @@ class BartDecoder(BartPretrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
             cross_attentions=all_cross_attentions,
-            focus_bias_vector = focus_bias_mean # Changes made here
+            focus_bias_vector = focus_bias_sum # Changes made here
         )
 
 
@@ -1208,7 +1207,7 @@ class BartModel(BartPretrainedModel):
             )
 
         # Changes made here
-        fame_vector,tx_vector = self.fame(encoder_outputs)
+        fame_vector,tx_vector = self.fame(encoder_outputs.last_hidden_state)
 
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
         decoder_outputs = self.decoder(
@@ -1239,7 +1238,7 @@ class BartModel(BartPretrainedModel):
             encoder_last_hidden_state=encoder_outputs.last_hidden_state,
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
-            focus_bias_vector = decoder_outputs.focus_bias_vector # Changes made here
+            focus_bias_vector = decoder_outputs.focus_bias_vector, # Changes made here
             tx_vector = tx_vector # Changes made here
         )
 
@@ -1269,6 +1268,16 @@ class BartForConditionalGeneration(BartPretrainedModel):
         new_embeddings = super().resize_token_embeddings(new_num_tokens)
         self._resize_final_logits_bias(new_num_tokens)
         return new_embeddings
+    
+    def topic_loss_fct(self,labels,tx_vector):
+        one_hot_mask_true = torch.zeros(self.config.vocab_size)
+        one_hot_mask_true[labels] = 1
+        one_hot_mask_false = torch.logical_not(one_hot_mask_true)
+        one_hot_mask_false = one_hot_mask_false.float() 
+        tx_vector_masked_true_values = one_hot_mask_true * tx_vector
+        tx_vector_masked_false_values = one_hot_mask_false * tx_vector
+        loss = (-1)*torch.mean(torch.log(F.sigmoid(tx_vector_masked_true_values)) + torch.log(1-F.sigmoid(tx_vector_masked_false_labels)))
+        return loss
 
     def _resize_final_logits_bias(self, new_num_tokens: int) -> None:
         old_num_tokens = self.final_logits_bias.shape[-1]
@@ -1350,7 +1359,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             # Changes made here
-            topic_loss_fct = BCELoss() # Changes made here
+            topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
             masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
             topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1)) # Changes made here
             final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
