@@ -299,6 +299,7 @@ class BartEncoderLayer(nn.Module):
                 returned tensors for more detail.
         """
         residual = hidden_states
+        src_len = hidden_states.size(0)
         hidden_states, attn_weights, _, _ = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -328,7 +329,7 @@ class BartEncoderLayer(nn.Module):
         if output_attentions:
             outputs += (attn_weights,)
 
-        return outputs
+        return outputs,src_len
 
 
 class BartDecoderLayer(nn.Module):
@@ -388,7 +389,7 @@ class BartDecoderLayer(nn.Module):
                 returned tensors for more detail.
         """
         residual = hidden_states
-
+        # src_len = hidden_states.size(1)
         # Self Attention
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
@@ -448,7 +449,7 @@ class BartDecoderLayer(nn.Module):
             outputs += (present_key_value,)
 
         # Changes made here
-        return outputs,cross_attention_probs
+        return outputs,cross_attention_probs,src_len
 
 
 class BartClassificationHead(nn.Module):
@@ -797,14 +798,14 @@ class BartEncoder(BartPretrainedModel):
 
                         return custom_forward
 
-                    layer_outputs = torch.utils.checkpoint.checkpoint(
+                    layer_outputs,src_len = torch.utils.checkpoint.checkpoint(
                         create_custom_forward(encoder_layer),
                         hidden_states,
                         attention_mask,
                         (head_mask[idx] if head_mask is not None else None),
                     )
                 else:
-                    layer_outputs = encoder_layer(
+                    layer_outputs,src_len = encoder_layer(
                         hidden_states,
                         attention_mask,
                         layer_head_mask=(head_mask[idx] if head_mask is not None else None),
@@ -820,9 +821,9 @@ class BartEncoder(BartPretrainedModel):
             encoder_states = encoder_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, encoder_states, all_attentions] if v is not None)
+            return tuple(v for v in [hidden_states, encoder_states, all_attentions,src_len] if v is not None)
         return BaseModelOutput(
-            last_hidden_state=hidden_states, hidden_states=encoder_states, attentions=all_attentions
+            last_hidden_state=hidden_states, hidden_states=encoder_states, attentions=all_attentions,src_len=src_len
         )
 
 
@@ -1047,7 +1048,7 @@ class BartDecoder(BartPretrainedModel):
 
                     return custom_forward
                 # Changes made here
-                layer_outputs,attention_outputs = torch.utils.checkpoint.checkpoint(
+                layer_outputs,attention_outputs,src_seq_len = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(decoder_layer),
                     hidden_states,
                     attention_mask,
@@ -1059,7 +1060,7 @@ class BartDecoder(BartPretrainedModel):
                 )
             else:
                 # Changes made here
-                layer_outputs,attention_outputs = decoder_layer(
+                layer_outputs,attention_outputs,src_seq_len = decoder_layer(
                     hidden_states,
                     attention_mask=attention_mask,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1085,7 +1086,9 @@ class BartDecoder(BartPretrainedModel):
 
         # # Changes made here
         # print("attention_outputs: ",attention_outputs.size())
-        # print("Fame Vector: ",fame_vector.size())
+        print("Fame Vector: ",fame_vector.size())
+        print("src length: ",src_seq_len)
+        print("trg length: ",trg_seq_len)
         fame_transpose = fame_vector.reshape(bsz,self.config.vocab_size,src_seq_len)
         attn_t = attention_outputs.reshape(bsz,src_seq_len,trg_seq_len)
         focus_bias_vector = torch.bmm(fame_transpose,attn_t).reshape(bsz,trg_seq_len,self.config.vocab_size)
@@ -1107,7 +1110,7 @@ class BartDecoder(BartPretrainedModel):
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
-            cross_attentions=all_cross_attentions
+            cross_attentions=all_cross_attentions,
             focus_bias_vector = focus_bias_sum # Changes made here
         )
 
@@ -1220,6 +1223,7 @@ class BartModel(BartPretrainedModel):
 
         # Changes made here
         fame_vector,tx_vector = self.fame(encoder_outputs.last_hidden_state)
+        src_len = encoder_outputs.src_len
 
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
         decoder_outputs = self.decoder(
@@ -1234,8 +1238,9 @@ class BartModel(BartPretrainedModel):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict
-            fame_vector = fame_vector # Changes made here
+            return_dict=return_dict,
+            fame_vector = fame_vector,
+            src_len = src_len # Changes made here
         )
 
         if not return_dict:
@@ -1249,7 +1254,7 @@ class BartModel(BartPretrainedModel):
             cross_attentions=decoder_outputs.cross_attentions,
             encoder_last_hidden_state=encoder_outputs.last_hidden_state,
             encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions
+            encoder_attentions=encoder_outputs.attentions,
             focus_bias_vector = decoder_outputs.focus_bias_vector, # Changes made here
             tx_vector = tx_vector # Changes made here
         )
