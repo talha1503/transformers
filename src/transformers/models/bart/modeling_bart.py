@@ -899,8 +899,9 @@ class BartDecoder(BartPretrainedModel):
         return_dict=None,
         fame_vector = None,
         src_seq_len = None # Changes made here
-    ):
-        r"""
+    ):  
+    
+        """
         Args:
             input_ids (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`):
                 Indices of input sequence tokens in the vocabulary. Padding will be ignored by default should you
