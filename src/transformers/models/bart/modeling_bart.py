@@ -897,7 +897,8 @@ class BartDecoder(BartPretrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        fame_vector = None # Changes made here
+        fame_vector = None,
+        src_seq_len = None # Changes made here
     ):
         r"""
         Args:
@@ -995,7 +996,7 @@ class BartDecoder(BartPretrainedModel):
             attention_mask, input_shape, inputs_embeds, past_key_values_length
         )
 
-        bsz, src_seq_len, trg_seq_len = attention_mask.size(0),attention_mask.size(3),attention_mask.size(2)
+        bsz, trg_seq_len = attention_mask.size(0),attention_mask.size(2)
 
         # expand encoder attention mask
         if encoder_hidden_states is not None and encoder_attention_mask is not None:
@@ -1240,7 +1241,7 @@ class BartModel(BartPretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             fame_vector = fame_vector,
-            src_len = src_len # Changes made here
+            src_seq_len = src_len # Changes made here
         )
 
         if not return_dict:
