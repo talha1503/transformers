@@ -1367,9 +1367,16 @@ class BartForConditionalGeneration(BartPretrainedModel):
         )
 
         lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
-        print("Logits size: ", lm_logits.size())
+        # print("Logits size: ", lm_logits.size())
         # Changes made here
-        final_distribution = lm_logits + outputs.focus_bias_vector
+        # print("Focus bias vector size: ", outputs.focus_bias_vector.size())
+        focus_bias_vector = outputs.focus_bias_vector.unsqueeze(1)
+        focus_bias_vector = focus_bias_vector.repeat(1,labels.size(1),1)
+        # print("Labels: ",labels.size(1))
+        # print("focus_bias_vector: ",focus_bias_vector.size())
+        # print("lm logits size: ",lm_logits.size())
+        final_distribution = lm_logits + focus_bias_vector
+        
 
         masked_lm_loss = None
         if labels is not None:
