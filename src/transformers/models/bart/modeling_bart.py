@@ -299,7 +299,7 @@ class BartEncoderLayer(nn.Module):
                 returned tensors for more detail.
         """
         residual = hidden_states
-        src_len = hidden_states.size(0)
+        src_len = hidden_states.size(1)
         hidden_states, attn_weights, _, _ = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -408,7 +408,6 @@ class BartDecoderLayer(nn.Module):
         cross_attn_present_key_value = None
         cross_attn_weights = None
         if encoder_hidden_states is not None:
-            print("--------------------I AM IN HERE-----------")
             residual = hidden_states
 
             # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
@@ -449,7 +448,7 @@ class BartDecoderLayer(nn.Module):
             outputs += (present_key_value,)
 
         # Changes made here
-        return outputs,cross_attention_probs,src_len
+        return outputs,cross_attention_probs
 
 
 class BartClassificationHead(nn.Module):
@@ -1050,7 +1049,7 @@ class BartDecoder(BartPretrainedModel):
 
                     return custom_forward
                 # Changes made here
-                layer_outputs,attention_outputs,src_seq_len = torch.utils.checkpoint.checkpoint(
+                layer_outputs,attention_outputs = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(decoder_layer),
                     hidden_states,
                     attention_mask,
@@ -1062,7 +1061,7 @@ class BartDecoder(BartPretrainedModel):
                 )
             else:
                 # Changes made here
-                layer_outputs,attention_outputs,src_seq_len = decoder_layer(
+                layer_outputs,attention_outputs = decoder_layer(
                     hidden_states,
                     attention_mask=attention_mask,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1088,9 +1087,6 @@ class BartDecoder(BartPretrainedModel):
 
         # # Changes made here
         # print("attention_outputs: ",attention_outputs.size())
-        print("Fame Vector: ",fame_vector.size())
-        print("src length: ",src_seq_len)
-        print("trg length: ",trg_seq_len)
         fame_transpose = fame_vector.reshape(bsz,self.config.vocab_size,src_seq_len)
         attn_t = attention_outputs.reshape(bsz,src_seq_len,trg_seq_len)
         focus_bias_vector = torch.bmm(fame_transpose,attn_t).reshape(bsz,trg_seq_len,self.config.vocab_size)
