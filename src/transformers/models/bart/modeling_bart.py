@@ -1288,7 +1288,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         print("Tx vector: ",tx_vector.size())
         print("labels: ",labels.size())
         one_hot_mask_true = torch.zeros((labels.size(0),self.config.vocab_size))
-        one_hot_mask_true[labels] = 1
+        one_hot_mask_true[labels.detach()] = 1
 
         one_hot_mask_false = torch.logical_not(one_hot_mask_true)
         one_hot_mask_false = one_hot_mask_false.float() 
@@ -1378,7 +1378,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # print("Labels: ",labels.size(1))
         # print("focus_bias_vector: ",focus_bias_vector.size())
         # print("lm logits size: ",lm_logits.size())
-        final_distribution = lm_logits + focus_bias_vector
+        final_distribution = lm_logits + outputs.focus_bias_vector
         
 
         masked_lm_loss = None
