@@ -1090,7 +1090,7 @@ class BartDecoder(BartPretrainedModel):
         fame_transpose = fame_vector.reshape(bsz,self.config.vocab_size,src_seq_len)
         attn_t = attention_outputs.reshape(bsz,src_seq_len,trg_seq_len)
         focus_bias_vector = torch.bmm(fame_transpose,attn_t).reshape(bsz,trg_seq_len,self.config.vocab_size)
-        focus_bias_sum = torch.sum(focus_bias_vector,1)
+        # focus_bias_sum = torch.sum(focus_bias_vector,1)
 
         # add hidden states from the last decoder layer
         if output_hidden_states:
@@ -1109,7 +1109,7 @@ class BartDecoder(BartPretrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
             cross_attentions=all_cross_attentions,
-            focus_bias_vector = focus_bias_sum # Changes made here
+            focus_bias_vector = focus_bias_vector # Changes made here
         )
 
 
@@ -1120,7 +1120,8 @@ class BartFame(nn.Module):
         self.fc1 = nn.Linear(1024,4096)
         self.fc2 = nn.Linear(4096,1024)
         self.embedding_layer = embedding_layer
-        self.embedding_layer_weights = self.embedding_layer.weight.clone().T
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.embedding_layer_weights = self.embedding_layer.weight.clone().T.to(device)
 
     def forward(self,encoder_outputs):
         fc1_output = self.fc1(encoder_outputs)
@@ -1270,7 +1271,6 @@ class BartForConditionalGeneration(BartPretrainedModel):
         self.model = BartModel(config)
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
-
         self.init_weights()
 
     def get_encoder(self):
@@ -1285,8 +1285,11 @@ class BartForConditionalGeneration(BartPretrainedModel):
         return new_embeddings
     
     def topic_loss_fct(self,labels,tx_vector):
-        one_hot_mask_true = torch.zeros(self.config.vocab_size)
+        print("Tx vector: ",tx_vector.size())
+        print("labels: ",labels.size())
+        one_hot_mask_true = torch.zeros((labels.size(0),self.config.vocab_size,device=self.model.device()))
         one_hot_mask_true[labels] = 1
+
         one_hot_mask_false = torch.logical_not(one_hot_mask_true)
         one_hot_mask_false = one_hot_mask_false.float() 
         tx_vector_masked_true_values = one_hot_mask_true * tx_vector
@@ -1365,13 +1368,13 @@ class BartForConditionalGeneration(BartPretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
+        # bs, target_legnth, vocab_size, 
         lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
         # print("Logits size: ", lm_logits.size())
         # Changes made here
         # print("Focus bias vector size: ", outputs.focus_bias_vector.size())
-        focus_bias_vector = outputs.focus_bias_vector.unsqueeze(1)
-        focus_bias_vector = focus_bias_vector.repeat(1,labels.size(1),1)
+        # focus_bias_vector = outputs.focus_bias_vector.unsqueeze(1)
+        # focus_bias_vector = focus_bias_vector.repeat(1,labels.size(1),1)
         # print("Labels: ",labels.size(1))
         # print("focus_bias_vector: ",focus_bias_vector.size())
         # print("lm logits size: ",lm_logits.size())
@@ -1384,9 +1387,9 @@ class BartForConditionalGeneration(BartPretrainedModel):
             # Changes made here
             # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
             masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
-            # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1)) # Changes made here
-            # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
-            final_loss = 0.5*masked_lm_loss
+            topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
+            final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
+            # final_loss = 0.5*masked_lm_loss
 
         if not return_dict:
             output = (final_distribution,) + outputs[1:] # Changes made here
@@ -1888,4 +1891,4 @@ class BartForCausalLM(BartPretrainedModel):
         reordered_past = ()
         for layer_past in past:
             reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
-        return reordered_past
+        return reordered_past   
