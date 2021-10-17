@@ -1187,7 +1187,7 @@ class BartModel(BartPretrainedModel):
         output_hidden_states=None,
         return_dict=None,
     ):
-
+        
         # different to other models, Bart automatically creates decoder_input_ids from
         # input_ids if no decoder_input_ids are provided
         if decoder_input_ids is None and decoder_inputs_embeds is None:
@@ -1379,7 +1379,6 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # print("focus_bias_vector: ",focus_bias_vector.size())
         # print("lm logits size: ",lm_logits.size())
         final_distribution = lm_logits + outputs.focus_bias_vector
-        
 
         masked_lm_loss = None
         if labels is not None:
@@ -1387,9 +1386,9 @@ class BartForConditionalGeneration(BartPretrainedModel):
             # Changes made here
             # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
             masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
-            topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
-            final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
-            # final_loss = 0.5*masked_lm_loss
+            # topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
+            # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
+            final_loss = 0.5*masked_lm_loss
 
         if not return_dict:
             output = (final_distribution,) + outputs[1:] # Changes made here
