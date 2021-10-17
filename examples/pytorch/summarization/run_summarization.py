@@ -357,6 +357,7 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
+    device = torch.device('cuda' if torch.device.cuda.is_available() else 'cpu')
     model = AutoModelForSeq2SeqLM.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -364,7 +365,7 @@ def main():
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-    )
+    ).to(device)
 
     model.resize_token_embeddings(len(tokenizer))
 
