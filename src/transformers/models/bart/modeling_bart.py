@@ -333,9 +333,11 @@ class BartEncoderLayer(nn.Module):
             layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
         )
-        print("attn_weights device: ",attn_weights.device)
+        if attn_weights:
+          print("attn_weights device: ",attn_weights.device)
         print("attention_mask device: ",attention_mask.device)
-        print("layer_head_mask device: ",layer_head_mask.device)
+        if layer_head_mask:
+          print("layer_head_mask device: ",layer_head_mask.device)
 
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         print("hidden_states device: ",hidden_states.device)
@@ -444,10 +446,13 @@ class BartDecoderLayer(nn.Module):
             output_attentions=output_attentions,
         )
         print("hidden_states device: ",hidden_states.device)
-        print("self_attn_weights device: ",self_attn_weights.device)
-        print("layer_head_mask device: ",layer_head_mask.device)
+        if self_attn_weights:
+          print("self_attn_weights device: ",self_attn_weights.device)
+        if layer_head_mask:
+          print("layer_head_mask device: ",layer_head_mask.device)
         print("attention_mask device: ",attention_mask.device)
-        print("past_key_value device: ",past_key_value.device)
+        if past_key_value:
+          print("past_key_value device: ",past_key_value.device)
         
 
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
@@ -464,7 +469,8 @@ class BartDecoderLayer(nn.Module):
 
             # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
             cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
-            print("cross_attn_past_key_value device: ",cross_attn_past_key_value.device)
+            if cross_attn_past_key_value:
+              print("cross_attn_past_key_value device: ",cross_attn_past_key_value.device)
             print("hidden_states device: ",hidden_states.device)
             hidden_states, cross_attn_weights, cross_attn_present_key_value, cross_attention_probs = self.encoder_attn(
                 hidden_states=hidden_states,
@@ -475,14 +481,17 @@ class BartDecoderLayer(nn.Module):
                 output_attentions=output_attentions,
             )
             print("hidden_states device: ",hidden_states.device)
-            print("cross_attn_weights device: ",cross_attn_weights.device)
-            print("cross_attn_present_key_value device: ",cross_attn_present_key_value.device)
+            if cross_attn_weights:
+              print("cross_attn_weights device: ",cross_attn_weights.device)
+            # print("cross_attn_present_key_value device: ",cross_attn_present_key_value.device)
             print("cross_attention_probs device: ",cross_attention_probs.device)
             
             print("encoder_attention_mask device: ",encoder_attention_mask.device)
-            print("cross_attn_layer_head_mask device: ",cross_attn_layer_head_mask.device)
-            print("cross_attn_past_key_value device: ",cross_attn_past_key_value.device)
-            print("output_attentions device: ",output_attentions.device)
+            if cross_attn_layer_head_mask:
+              print("cross_attn_layer_head_mask device: ",cross_attn_layer_head_mask.device)
+            if cross_attn_past_key_value:
+              print("cross_attn_past_key_value device: ",cross_attn_past_key_value.device)
+            # print("output_attentions device: ",output_attentions.device)
 
             hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
             print("hidden_states device: ",hidden_states.device)
@@ -496,7 +505,7 @@ class BartDecoderLayer(nn.Module):
 
             # add cross-attn to positions 3,4 of present_key_value tuple
             present_key_value = present_key_value + cross_attn_present_key_value
-            print("present_key_value device: ",present_key_value.device)
+            # print("present_key_value device: ",present_key_value.device)
         # Fully Connected
         residual = hidden_states
         hidden_states = self.activation_fn(self.fc1(hidden_states))
@@ -891,7 +900,7 @@ class BartEncoder(BartPretrainedModel):
                         layer_head_mask=(head_mask[idx] if head_mask is not None else None),
                         output_attentions=output_attentions,
                     )
-                    print("layer_outputs device: ",layer_outputs.device)
+                    # print("layer_outputs device: ",layer_outputs.device)
 
                 hidden_states = layer_outputs[0]
 
@@ -1167,7 +1176,7 @@ class BartDecoder(BartPretrainedModel):
                     output_attentions=output_attentions,
                     use_cache=use_cache,
                 )
-                print("layer_outputs device: ",layer_outputs.device)
+                print("layer_outputs device: ",layer_outputs[0].device)
                 print("attention_outputs device: ",attention_outputs.device)
             hidden_states = layer_outputs[0]
             
@@ -1303,12 +1312,12 @@ class BartModel(BartPretrainedModel):
             print("decoder_input_ids device: ",decoder_input_ids.device)
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        print("output_attentions device: ",output_attentions.device)
+        # print("output_attentions device: ",output_attentions.device)
 
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
-        print("output_hidden_states device: ",output_hidden_states.device)
+        # print("output_hidden_states device: ",output_hidden_states.device)
 
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
@@ -1464,7 +1473,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                     labels, self.config.pad_token_id, self.config.decoder_start_token_id
                 )
 
-        print("Inputs device: ",inputs.device)
+        print("Inputs device: ",input_ids.device)
         print("Labels device: ",labels.device)
         # Changes made here
         outputs = self.model(
@@ -1488,7 +1497,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
         print("lm_head device: ",self.lm_head(outputs[0]).device)
         print("final_logits_bias device: ",self.final_logits_bias.device)
-        print("lm_logits device: ",self.lm_logits.device)
+        print("lm_logits device: ",lm_logits.device)
         # print("Logits size: ", lm_logits.size())
         # Changes made here
         # print("Focus bias vector size: ", outputs.focus_bias_vector.size())
