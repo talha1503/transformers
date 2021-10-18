@@ -168,9 +168,10 @@ class BartAttention(nn.Module):
         # for the decoder
         is_cross_attention = key_value_states is not None
         bsz, tgt_len, embed_dim = hidden_states.size()
-
+        print("hidden_states device: ",hidden_states.device)
         # get query proj
         query_states = self.q_proj(hidden_states) * self.scaling
+        print("query_states device: ",query_states.device)
         # get key, value proj
         if is_cross_attention and past_key_value is not None:
             # reuse k,v, cross_attentions
@@ -179,18 +180,25 @@ class BartAttention(nn.Module):
         elif is_cross_attention:
             # cross_attentions
             key_states = self._shape(self.k_proj(key_value_states), -1, bsz)
+            print("key_states device: ",key_states.device)
             value_states = self._shape(self.v_proj(key_value_states), -1, bsz)
+            print("value_states device: ",value_states.device)
         elif past_key_value is not None:
             # reuse k, v, self_attention
             key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
+            print("key_states device: ",key_states.device)
             value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
+            print("value_states device: ",value_states.device)
             key_states = torch.cat([past_key_value[0], key_states], dim=2)
+            print("key_states device: ",key_states.device)
             value_states = torch.cat([past_key_value[1], value_states], dim=2)
+            print("value_states device: ",value_states.device)
         else:
             # self_attention
             key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
+            print("key_states device: ",key_states.device)
             value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-
+            print("value_states device: ",value_states.device)
         if self.is_decoder:
             # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
             # Further calls to cross_attention layer can then reuse all cross-attention
@@ -203,11 +211,15 @@ class BartAttention(nn.Module):
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
+        print("query_states device: ",query_states.device)
         key_states = key_states.view(*proj_shape)
+        print("key_states device: ",key_states.device)
         value_states = value_states.view(*proj_shape)
+        print("value_states device: ",value_states.device)
 
         src_len = key_states.size(1)
         attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
+        print("attn_weights device: ",attn_weights.device)
 
         if attn_weights.size() != (bsz * self.num_heads, tgt_len, src_len):
             raise ValueError(
@@ -220,9 +232,13 @@ class BartAttention(nn.Module):
                     f"Attention mask should be of size {(bsz, 1, tgt_len, src_len)}, but is {attention_mask.size()}"
                 )
             attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
+            print("attention_mask device: ",attention_mask.device)
+            print("attn_weights device: ",attn_weights.device)
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
+            print("attn_weights device: ",attn_weights.device)
 
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+        print("attn_weights device: ",attn_weights.device)
 
         if layer_head_mask is not None:
             if layer_head_mask.size() != (self.num_heads,):
@@ -230,7 +246,9 @@ class BartAttention(nn.Module):
                     f"Head mask for a single layer should be of size {(self.num_heads,)}, but is {layer_head_mask.size()}"
                 )
             attn_weights = layer_head_mask.view(1, -1, 1, 1) * attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            print("layer_head_mask device: ",layer_head_mask.device)
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
+            print("attn_weights device: ",attn_weights.device)
 
         if output_attentions:
             # this operation is a bit awkward, but it's required to
@@ -238,16 +256,21 @@ class BartAttention(nn.Module):
             # In order to do so, attn_weights have to be reshaped
             # twice and have to be reused in the following
             attn_weights_reshaped = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            print("attn_weights_reshaped device: ",attn_weights_reshaped.device)
             attn_weights = attn_weights_reshaped.view(bsz * self.num_heads, tgt_len, src_len)
+            print("attn_weights device: ",attn_weights.device)
         else:
             attn_weights_reshaped = None
 
         attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
+        print("attn_probs device: ",attn_probs.device)
 
         tx_attn = attn_probs.view(bsz,self.num_heads,tgt_len,src_len)
+        print("tx_attn device: ",tx_attn.device)
         tx_attn = torch.mean(tx_attn,1)
-
+        print("tx_attn device: ",tx_attn.device)
         attn_output = torch.bmm(attn_probs, value_states)
+        print("attn_output device: ",attn_output.device)
 
         if attn_output.size() != (bsz * self.num_heads, tgt_len, self.head_dim):
             raise ValueError(
@@ -255,10 +278,13 @@ class BartAttention(nn.Module):
             )
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
+        print("attn_output device: ",attn_output.device)
         attn_output = attn_output.transpose(1, 2)
+        print("attn_output device: ",attn_output.device)
         attn_output = attn_output.reshape(bsz, tgt_len, embed_dim)
-
+        print("attn_output device: ",attn_output.device)
         attn_output = self.out_proj(attn_output)
+        print("attn_output device: ",attn_output.device)
 
         return attn_output, attn_weights_reshaped, past_key_value, tx_attn
 
@@ -299,6 +325,7 @@ class BartEncoderLayer(nn.Module):
                 returned tensors for more detail.
         """
         residual = hidden_states
+        print("residual device: ",residual.device)
         src_len = hidden_states.size(1)
         hidden_states, attn_weights, _, _ = self.self_attn(
             hidden_states=hidden_states,
@@ -306,23 +333,37 @@ class BartEncoderLayer(nn.Module):
             layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
         )
+        print("attn_weights device: ",attn_weights.device)
+        print("attention_mask device: ",attention_mask.device)
+        print("layer_head_mask device: ",layer_head_mask.device)
+
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = residual + hidden_states
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.self_attn_layer_norm(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
 
         residual = hidden_states
         hidden_states = self.activation_fn(self.fc1(hidden_states))
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.fc2(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = residual + hidden_states
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.final_layer_norm(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
 
         if hidden_states.dtype == torch.float16 and (
             torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()
         ):
             clamp_value = torch.finfo(hidden_states.dtype).max - 1000
             hidden_states = torch.clamp(hidden_states, min=-clamp_value, max=clamp_value)
+            print("hidden_states device: ",hidden_states.device)
 
         outputs = (hidden_states,)
 
@@ -389,6 +430,7 @@ class BartDecoderLayer(nn.Module):
                 returned tensors for more detail.
         """
         residual = hidden_states
+        print("residual device: ",residual.device)
         # src_len = hidden_states.size(1)
         # Self Attention
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
@@ -401,9 +443,19 @@ class BartDecoderLayer(nn.Module):
             layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
         )
+        print("hidden_states device: ",hidden_states.device)
+        print("self_attn_weights device: ",self_attn_weights.device)
+        print("layer_head_mask device: ",layer_head_mask.device)
+        print("attention_mask device: ",attention_mask.device)
+        print("past_key_value device: ",past_key_value.device)
+        
+
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = residual + hidden_states
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.self_attn_layer_norm(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
         # Cross-Attention Block
         cross_attn_present_key_value = None
         cross_attn_weights = None
@@ -412,6 +464,8 @@ class BartDecoderLayer(nn.Module):
 
             # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
             cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
+            print("cross_attn_past_key_value device: ",cross_attn_past_key_value.device)
+            print("hidden_states device: ",hidden_states.device)
             hidden_states, cross_attn_weights, cross_attn_present_key_value, cross_attention_probs = self.encoder_attn(
                 hidden_states=hidden_states,
                 key_value_states=encoder_hidden_states,
@@ -420,24 +474,43 @@ class BartDecoderLayer(nn.Module):
                 past_key_value=cross_attn_past_key_value,
                 output_attentions=output_attentions,
             )
+            print("hidden_states device: ",hidden_states.device)
+            print("cross_attn_weights device: ",cross_attn_weights.device)
+            print("cross_attn_present_key_value device: ",cross_attn_present_key_value.device)
+            print("cross_attention_probs device: ",cross_attention_probs.device)
+            
+            print("encoder_attention_mask device: ",encoder_attention_mask.device)
+            print("cross_attn_layer_head_mask device: ",cross_attn_layer_head_mask.device)
+            print("cross_attn_past_key_value device: ",cross_attn_past_key_value.device)
+            print("output_attentions device: ",output_attentions.device)
+
             hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+            print("hidden_states device: ",hidden_states.device)
             hidden_states = residual + hidden_states
+            print("residual device: ",residual.device)
             hidden_states = self.encoder_attn_layer_norm(hidden_states)
+            print("hidden_states device: ",hidden_states.device)
             # Changes made here
             # print("Cross attention weights: ",cross_attention_probs.size())
             # attention_outputs = cross_attention_probs[-2:]
 
             # add cross-attn to positions 3,4 of present_key_value tuple
             present_key_value = present_key_value + cross_attn_present_key_value
-
+            print("present_key_value device: ",present_key_value.device)
         # Fully Connected
         residual = hidden_states
         hidden_states = self.activation_fn(self.fc1(hidden_states))
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.fc2(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = residual + hidden_states
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.final_layer_norm(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
 
         outputs = (hidden_states,)
 
@@ -761,18 +834,22 @@ class BartEncoder(BartPretrainedModel):
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
+            print("inputs_embeds device: ",inputs_embeds.device)
 
         embed_pos = self.embed_positions(input_shape)
+        print("embed_pos device: ",embed_pos.device)
 
         hidden_states = inputs_embeds + embed_pos
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = self.layernorm_embedding(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-
+        print("hidden_states device: ",hidden_states.device)
         # expand attention_mask
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
             attention_mask = _expand_mask(attention_mask, inputs_embeds.dtype)
-
+            print("attention_mask device: ",attention_mask.device)
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
 
@@ -783,7 +860,10 @@ class BartEncoder(BartPretrainedModel):
             ), f"The head_mask should be specified for {len(self.layers)} layers, but it is for {head_mask.size()[0]}."
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
+                print("encoder_states device: ",encoder_states)
                 encoder_states = encoder_states + (hidden_states,)
+                print("encoder_states device: ",encoder_states)
+                print("hidden_states device: ",hidden_states)
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = random.uniform(0, 1)
             if self.training and (dropout_probability < self.layerdrop):  # skip the layer
@@ -803,6 +883,7 @@ class BartEncoder(BartPretrainedModel):
                         attention_mask,
                         (head_mask[idx] if head_mask is not None else None),
                     )
+                    print("layer_outputs device: ",layer_outputs.device)
                 else:
                     layer_outputs,src_len = encoder_layer(
                         hidden_states,
@@ -810,14 +891,18 @@ class BartEncoder(BartPretrainedModel):
                         layer_head_mask=(head_mask[idx] if head_mask is not None else None),
                         output_attentions=output_attentions,
                     )
+                    print("layer_outputs device: ",layer_outputs.device)
 
                 hidden_states = layer_outputs[0]
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
+                print("all_attentions device: ",all_attentions.device)
 
         if output_hidden_states:
             encoder_states = encoder_states + (hidden_states,)
+            print("encoder_states device: ",encoder_states.device)
+            print("hidden_states device: ",hidden_states.device)
 
         if not return_dict:
             return tuple(v for v in [hidden_states, encoder_states, all_attentions,src_len] if v is not None)
@@ -986,15 +1071,18 @@ class BartDecoder(BartPretrainedModel):
         else:
             raise ValueError("You have to specify either decoder_input_ids or decoder_inputs_embeds")
 
+        print("encoder_hidden_states device: ",encoder_hidden_states.device)
         # past_key_values_length
         past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
+            print("inputs_embeds device: ",inputs_embeds.device)
 
         attention_mask = self._prepare_decoder_attention_mask(
             attention_mask, input_shape, inputs_embeds, past_key_values_length
         )
+        print("attention_mask device: ",attention_mask.device)
 
         bsz, trg_seq_len = attention_mask.size(0),attention_mask.size(2)
 
@@ -1002,14 +1090,17 @@ class BartDecoder(BartPretrainedModel):
         if encoder_hidden_states is not None and encoder_attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
             encoder_attention_mask = _expand_mask(encoder_attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1])
-
+            print("encoder_attention_mask device: ",encoder_attention_mask.device)
         # embed positions
         positions = self.embed_positions(input_shape, past_key_values_length)
+        print("positions device: ",positions.device)
 
         hidden_states = inputs_embeds + positions
         hidden_states = self.layernorm_embedding(hidden_states)
+        print("hidden_states device: ",hidden_states.device)
 
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        print("hidden_states device: ",hidden_states.device)
 
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
@@ -1059,6 +1150,8 @@ class BartDecoder(BartPretrainedModel):
                     cross_attn_head_mask[idx] if cross_attn_head_mask is not None else None,
                     None,
                 )
+                print("layer_outputs device: ",layer_outputs.device)
+                print("attention_outputs device: ",attention_outputs.device)
             else:
                 # Changes made here
                 layer_outputs,attention_outputs = decoder_layer(
@@ -1074,6 +1167,8 @@ class BartDecoder(BartPretrainedModel):
                     output_attentions=output_attentions,
                     use_cache=use_cache,
                 )
+                print("layer_outputs device: ",layer_outputs.device)
+                print("attention_outputs device: ",attention_outputs.device)
             hidden_states = layer_outputs[0]
             
             if use_cache:
@@ -1088,8 +1183,12 @@ class BartDecoder(BartPretrainedModel):
         # # Changes made here
         # print("attention_outputs: ",attention_outputs.size())
         fame_transpose = fame_vector.reshape(bsz,self.config.vocab_size,src_seq_len)
+        print("fame_transpose device: ",fame_transpose.device)
+        print("fame_vector device: ",fame_vector.device)
         attn_t = attention_outputs.reshape(bsz,src_seq_len,trg_seq_len)
+        print("attn_t device: ",attn_t.device)
         focus_bias_vector = torch.bmm(fame_transpose,attn_t).reshape(bsz,trg_seq_len,self.config.vocab_size)
+        print("focus_bias_vector device: ",focus_bias_vector.device)
         # focus_bias_sum = torch.sum(focus_bias_vector,1)
 
         # add hidden states from the last decoder layer
@@ -1124,11 +1223,18 @@ class BartFame(nn.Module):
         self.embedding_layer_weights = self.embedding_layer.weight.clone().T.to(device)
 
     def forward(self,encoder_outputs):
+        print("encoder_outputs device: ",encoder_outputs.device)
         fc1_output = self.fc1(encoder_outputs)
+        print("fc1_output device: ",fc1_output.device)
         gelu_activated_output = nn.functional.gelu(fc1_output)
+        print("gelu_activated_output device: ",gelu_activated_output.device)
         fc2_output = self.fc2(gelu_activated_output)
+        print("fc2_output device: ",fc2_output.device)
         t_vector = torch.matmul(fc2_output,self.embedding_layer_weights)
+        print("self.embedding_layer_weights device: ",self.embedding_layer_weights.device)
+        print("t_vector device: ",t_vector.device)
         tx = torch.mean(t_vector,1)
+        print("tx device: ",tx.device)
         return t_vector, tx
 
 @add_start_docstrings(
@@ -1194,11 +1300,16 @@ class BartModel(BartPretrainedModel):
             decoder_input_ids = shift_tokens_right(
                 input_ids, self.config.pad_token_id, self.config.decoder_start_token_id
             )
+            print("decoder_input_ids device: ",decoder_input_ids.device)
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        print("output_attentions device: ",output_attentions.device)
+
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
+        print("output_hidden_states device: ",output_hidden_states.device)
+
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -1212,6 +1323,7 @@ class BartModel(BartPretrainedModel):
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
             )
+            
         # If the user passed a tuple for encoder_outputs, we wrap it in a BaseModelOutput when return_dict=True
         elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
             encoder_outputs = BaseModelOutput(
@@ -1219,9 +1331,11 @@ class BartModel(BartPretrainedModel):
                 hidden_states=encoder_outputs[1] if len(encoder_outputs) > 1 else None,
                 attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
             )
-
         # Changes made here
         fame_vector,tx_vector = self.fame(encoder_outputs.last_hidden_state)
+        print("fame_vector device: ",fame_vector.device)
+        print("tx_vector device: ",tx_vector.device)
+        print("encoder_outputs.last_hidden_state device: ",encoder_outputs.last_hidden_state.device)
         src_len = encoder_outputs.src_len
 
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
@@ -1350,6 +1464,8 @@ class BartForConditionalGeneration(BartPretrainedModel):
                     labels, self.config.pad_token_id, self.config.decoder_start_token_id
                 )
 
+        print("Inputs device: ",inputs.device)
+        print("Labels device: ",labels.device)
         # Changes made here
         outputs = self.model(
             input_ids,
@@ -1370,6 +1486,9 @@ class BartForConditionalGeneration(BartPretrainedModel):
         )
         # bs, target_legnth, vocab_size, 
         lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
+        print("lm_head device: ",self.lm_head(outputs[0]).device)
+        print("final_logits_bias device: ",self.final_logits_bias.device)
+        print("lm_logits device: ",self.lm_logits.device)
         # print("Logits size: ", lm_logits.size())
         # Changes made here
         # print("Focus bias vector size: ", outputs.focus_bias_vector.size())
@@ -1379,6 +1498,9 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # print("focus_bias_vector: ",focus_bias_vector.size())
         # print("lm logits size: ",lm_logits.size())
         final_distribution = lm_logits + outputs.focus_bias_vector
+        print("outputs.focus_bias_vector device:  ",outputs.focus_bias_vector.device)
+        print("final_distribution device:  ",final_distribution.device)
+        
 
         masked_lm_loss = None
         if labels is not None:
@@ -1386,9 +1508,11 @@ class BartForConditionalGeneration(BartPretrainedModel):
             # Changes made here
             # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
             masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
+            print("masked_lm_loss device:  ",masked_lm_loss.device)
             # topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
             # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
             final_loss = 0.5*masked_lm_loss
+            print("final_loss device:  ",final_loss.device)
 
         if not return_dict:
             output = (final_distribution,) + outputs[1:] # Changes made here
