@@ -97,7 +97,7 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] 
     bsz, src_len = mask.size()
     tgt_len = tgt_len if tgt_len is not None else src_len
 
-    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype)
+    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype).to(torch.device('cuda:0'))
 
     inverted_mask = 1.0 - expanded_mask
 
@@ -121,6 +121,7 @@ class BartLearnedPositionalEmbedding(nn.Embedding):
         positions = torch.arange(
             past_key_values_length, past_key_values_length + seq_len, dtype=torch.long, device=self.weight.device
         )
+        print("positions device: ",positions.device)
         return super().forward(positions + self.offset)
 
 
@@ -1515,25 +1516,44 @@ class BartForConditionalGeneration(BartPretrainedModel):
         print("final_distribution device:  ",final_distribution.device)
         
 
+        # masked_lm_loss = None
+        # if labels is not None:
+        #     loss_fct = CrossEntropyLoss()
+        #     # Changes made here
+        #     # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
+        #     masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
+        #     print("masked_lm_loss device:  ",masked_lm_loss.device)
+        #     # topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
+        #     # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
+        #     final_loss = 0.5*masked_lm_loss
+        #     print("final_loss device:  ",final_loss.device)
         masked_lm_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            # Changes made here
-            # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
-            masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
-            print("masked_lm_loss device:  ",masked_lm_loss.device)
-            # topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
-            # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
-            final_loss = 0.5*masked_lm_loss
-            print("final_loss device:  ",final_loss.device)
+            masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
 
+        # if not return_dict:
+        #     output = (final_distribution,) + outputs[1:] # Changes made here
+        #     return ((final_loss,) + output) if final_loss is not None else output
+
+        # return Seq2SeqLMOutput(
+        #     loss=final_loss,
+        #     logits=final_distribution, # Changes made here
+        #     past_key_values=outputs.past_key_values,
+        #     decoder_hidden_states=outputs.decoder_hidden_states,
+        #     decoder_attentions=outputs.decoder_attentions,
+        #     cross_attentions=outputs.cross_attentions,
+        #     encoder_last_hidden_state=outputs.encoder_last_hidden_state,
+        #     encoder_hidden_states=outputs.encoder_hidden_states,
+        #     encoder_attentions=outputs.encoder_attentions,
+        # )
         if not return_dict:
-            output = (final_distribution,) + outputs[1:] # Changes made here
-            return ((final_loss,) + output) if final_loss is not None else output
+            output = (lm_logits,) + outputs[1:]
+            return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
 
         return Seq2SeqLMOutput(
-            loss=final_loss,
-            logits=final_distribution, # Changes made here
+            loss=masked_lm_loss,
+            logits=lm_logits,
             past_key_values=outputs.past_key_values,
             decoder_hidden_states=outputs.decoder_hidden_states,
             decoder_attentions=outputs.decoder_attentions,
