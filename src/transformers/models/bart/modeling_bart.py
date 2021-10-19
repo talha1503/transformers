@@ -79,13 +79,14 @@ def _make_causal_mask(input_ids_shape: torch.Size, dtype: torch.dtype, past_key_
     Make causal mask used for bi-directional self-attention.
     """
     bsz, tgt_len = input_ids_shape
-    mask = torch.full((tgt_len, tgt_len), float("-inf"))
-    mask_cond = torch.arange(mask.size(-1))
+    mask = torch.full((tgt_len, tgt_len), float("-inf"),device=torch.device('cuda:0'))
+    mask_cond = torch.arange(mask.size(-1),device=torch.device('cuda:0'))
     mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
     mask = mask.to(dtype)
+    mask = mask.to(torch.device('cuda:0'))
 
     if past_key_values_length > 0:
-        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype), mask], dim=-1)
+        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype,device=torch.device('cuda:0')), mask], dim=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
@@ -1392,7 +1393,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
     def __init__(self, config: BartConfig):
         super().__init__(config)
         self.model = BartModel(config)
-        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
+        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings),device=torch.device("cuda:0")))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         self.init_weights()
 
@@ -1426,6 +1427,9 @@ class BartForConditionalGeneration(BartPretrainedModel):
             new_bias = self.final_logits_bias[:, :new_num_tokens]
         else:
             extra_bias = torch.zeros((1, new_num_tokens - old_num_tokens), device=self.final_logits_bias.device)
+            print("-"*80)
+            print(self.final_logits_bias.device)
+            print("-"*80)
             new_bias = torch.cat([self.final_logits_bias, extra_bias], dim=1)
         self.register_buffer("final_logits_bias", new_bias)
 
