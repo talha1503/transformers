@@ -1193,13 +1193,16 @@ class BartDecoder(BartPretrainedModel):
 
         # # Changes made here
         # print("attention_outputs: ",attention_outputs.size())
-        fame_transpose = fame_vector.reshape(bsz,self.config.vocab_size,src_seq_len)
-        print("fame_transpose device: ",fame_transpose.device)
+        fame_vector = fame_vector.reshape(bsz,self.config.vocab_size,src_seq_len)
+        print("fame_transpose device: ",fame_vector.device)
         print("fame_vector device: ",fame_vector.device)
         attn_t = attention_outputs.reshape(bsz,src_seq_len,trg_seq_len)
         print("attn_t device: ",attn_t.device)
-        focus_bias_vector = torch.bmm(fame_transpose,attn_t).reshape(bsz,trg_seq_len,self.config.vocab_size)
+        focus_bias_vector = torch.bmm(fame_vector,attn_t)
         print("focus_bias_vector device: ",focus_bias_vector.device)
+        focus_bias_vector_reshaped = focus_bias_vector.reshape(bsz,trg_seq_len,self.config.vocab_size)
+        print("focus_bias_vector_reshaped device: ",focus_bias_vector_reshaped.device)
+        # print("focus_bias_vector_reshaped size: ",focus_bias_vector_reshaped.size())
         # focus_bias_sum = torch.sum(focus_bias_vector,1)
 
         # add hidden states from the last decoder layer
@@ -1219,7 +1222,7 @@ class BartDecoder(BartPretrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
             cross_attentions=all_cross_attentions,
-            focus_bias_vector = focus_bias_vector # Changes made here
+            focus_bias_vector = focus_bias_vector_reshaped # Changes made here
         )
 
 
@@ -1509,51 +1512,32 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # focus_bias_vector = outputs.focus_bias_vector.unsqueeze(1)
         # focus_bias_vector = focus_bias_vector.repeat(1,labels.size(1),1)
         # print("Labels: ",labels.size(1))
-        # print("focus_bias_vector: ",focus_bias_vector.size())
+        # print("focus_bias_vector size: ",outputs.focus_bias_vector.size())
         # print("lm logits size: ",lm_logits.size())
         final_distribution = lm_logits + outputs.focus_bias_vector
         print("outputs.focus_bias_vector device:  ",outputs.focus_bias_vector.device)
         print("final_distribution device:  ",final_distribution.device)
         
 
-        # masked_lm_loss = None
-        # if labels is not None:
-        #     loss_fct = CrossEntropyLoss()
-        #     # Changes made here
-        #     # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
-        #     masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
-        #     print("masked_lm_loss device:  ",masked_lm_loss.device)
-        #     # topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
-        #     # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
-        #     final_loss = 0.5*masked_lm_loss
-        #     print("final_loss device:  ",final_loss.device)
         masked_lm_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
-
-        # if not return_dict:
-        #     output = (final_distribution,) + outputs[1:] # Changes made here
-        #     return ((final_loss,) + output) if final_loss is not None else output
-
-        # return Seq2SeqLMOutput(
-        #     loss=final_loss,
-        #     logits=final_distribution, # Changes made here
-        #     past_key_values=outputs.past_key_values,
-        #     decoder_hidden_states=outputs.decoder_hidden_states,
-        #     decoder_attentions=outputs.decoder_attentions,
-        #     cross_attentions=outputs.cross_attentions,
-        #     encoder_last_hidden_state=outputs.encoder_last_hidden_state,
-        #     encoder_hidden_states=outputs.encoder_hidden_states,
-        #     encoder_attentions=outputs.encoder_attentions,
-        # )
+            # Changes made here
+            # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
+            masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
+            print("masked_lm_loss device:  ",masked_lm_loss.device)
+            # topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
+            # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
+            final_loss = 0.5*masked_lm_loss
+            print("final_loss device:  ",final_loss.device)
+        
         if not return_dict:
-            output = (lm_logits,) + outputs[1:]
-            return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
+            output = (final_distribution,) + outputs[1:] # Changes made here
+            return ((final_loss,) + output) if final_loss is not None else output
 
         return Seq2SeqLMOutput(
-            loss=masked_lm_loss,
-            logits=lm_logits,
+            loss=final_loss,
+            logits=final_distribution, # Changes made here
             past_key_values=outputs.past_key_values,
             decoder_hidden_states=outputs.decoder_hidden_states,
             decoder_attentions=outputs.decoder_attentions,
@@ -1562,6 +1546,29 @@ class BartForConditionalGeneration(BartPretrainedModel):
             encoder_hidden_states=outputs.encoder_hidden_states,
             encoder_attentions=outputs.encoder_attentions,
         )
+
+
+        # masked_lm_loss = None
+        # if labels is not None:
+        #     loss_fct = CrossEntropyLoss()
+        #     masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
+
+        
+        # if not return_dict:
+        #     output = (lm_logits,) + outputs[1:]
+        #     return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
+
+        # return Seq2SeqLMOutput(
+        #     loss=masked_lm_loss,
+        #     logits=lm_logits,
+        #     past_key_values=outputs.past_key_values,
+        #     decoder_hidden_states=outputs.decoder_hidden_states,
+        #     decoder_attentions=outputs.decoder_attentions,
+        #     cross_attentions=outputs.cross_attentions,
+        #     encoder_last_hidden_state=outputs.encoder_last_hidden_state,
+        #     encoder_hidden_states=outputs.encoder_hidden_states,
+        #     encoder_attentions=outputs.encoder_attentions,
+        # )
 
     def prepare_inputs_for_generation(
         self,

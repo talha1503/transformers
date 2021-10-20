@@ -1238,6 +1238,7 @@ class Trainer:
 
         # tr_loss is a tensor to avoid synchronization of TPUs through .item()
         tr_loss = torch.tensor(0.0).to(args.device)
+        print("TR LOSS DEVICE: ",tr_loss.device)
         # _total_loss_scalar is updated everytime .item() has to be called on tr_loss and stores the sum of all losses
         self._total_loss_scalar = 0.0
         self._globalstep_last_logged = self.state.global_step
@@ -2370,6 +2371,7 @@ class Trainer:
             return tensor
         # Gather all sizes
         size = torch.tensor(tensor.shape, device=tensor.device)[None]
+        print("SIZE TENSOR DEVICE: ",size.device)
         sizes = self._nested_gather(size).cpu()
 
         max_size = max(s[1] for s in sizes)
