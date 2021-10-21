@@ -1234,7 +1234,7 @@ class BartFame(nn.Module):
         self.fc2 = nn.Linear(4096,1024)
         self.embedding_layer = embedding_layer
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.embedding_layer_weights = self.embedding_layer.weight.clone().T.to(device)
+        self.embedding_layer_weights = self.embedding_layer.weight.clone().T.to(torch.device('cuda:0')
 
     def forward(self,encoder_outputs):
         print("encoder_outputs device: ",encoder_outputs.device)

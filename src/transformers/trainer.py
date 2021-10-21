@@ -1822,6 +1822,7 @@ class Trainer:
 
         if self.args.gradient_accumulation_steps > 1 and not self.deepspeed:
             # deepspeed handles loss scaling by gradient_accumulation_steps in its `backward`
+            print("Not using deepspeed")
             loss = loss / self.args.gradient_accumulation_steps
 
         if self.use_amp:
@@ -1858,7 +1859,7 @@ class Trainer:
         else:
             # We don't use .loss here since the model may return tuples instead of ModelOutput.
             loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-
+            print(loss.device)
         return (loss, outputs) if return_outputs else loss
 
     def is_local_process_zero(self) -> bool:
