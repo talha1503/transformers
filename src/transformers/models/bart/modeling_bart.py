@@ -1230,11 +1230,13 @@ class BartDecoder(BartPretrainedModel):
 class BartFame(nn.Module):
     def __init__(self,embedding_layer):
         super().__init__()
-        self.fc1 = nn.Linear(1024,4096)
-        self.fc2 = nn.Linear(4096,1024)
+        # self.fc1 = nn.Linear(1024,4096)
+        # self.fc2 = nn.Linear(4096,1024)
+        self.fc1 = nn.Linear(768,3072)
+        self.fc2 = nn.Linear(3072,768)
         self.embedding_layer = embedding_layer
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.embedding_layer_weights = self.embedding_layer.weight.clone().T.to(torch.device('cuda:0'))
+        self.embedding_layer_weights = self.embedding_layer.weight.detach().T.to(torch.device('cuda:0'))
 
     def forward(self,encoder_outputs):
         print("encoder_outputs device: ",encoder_outputs.device)
@@ -1244,6 +1246,7 @@ class BartFame(nn.Module):
         print("gelu_activated_output device: ",gelu_activated_output.device)
         fc2_output = self.fc2(gelu_activated_output)
         print("fc2_output device: ",fc2_output.device)
+        # random_v = torch.rand(self.embedding_layer_weights.size(),device=torch.device('cuda:0'))
         t_vector = torch.matmul(fc2_output,self.embedding_layer_weights)
         print("self.embedding_layer_weights device: ",self.embedding_layer_weights.device)
         print("t_vector device: ",t_vector.device)
@@ -1264,6 +1267,10 @@ class BartModel(BartPretrainedModel):
 
         self.encoder = BartEncoder(config, self.shared)
         self.fame = BartFame(self.shared)
+        # model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+        # params = sum([np.prod(p.size()) for p in model_parameters])
+        print("EMBEDDING PARAMS: ",self.shared.weight.requires_grad)
+        print("EMBEDDING DEVICE: ",self.shared.weight.device)
         self.decoder = BartDecoder(config, self.shared)
 
         self.init_weights()
@@ -1351,7 +1358,8 @@ class BartModel(BartPretrainedModel):
         print("tx_vector device: ",tx_vector.device)
         print("encoder_outputs.last_hidden_state device: ",encoder_outputs.last_hidden_state.device)
         src_len = encoder_outputs.src_len
-
+        print("EMBEDDING PARAMS: ",self.shared.weight.requires_grad)
+        print("EMBEDDING DEVICE: ",self.shared.weight.device)
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
