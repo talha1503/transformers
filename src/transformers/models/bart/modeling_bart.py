@@ -23,6 +23,7 @@ import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss,BCELoss
+import torch.nn.functional as F
 
 from ...activations import ACT2FN
 from ...file_utils import (
@@ -1421,13 +1422,17 @@ class BartForConditionalGeneration(BartPretrainedModel):
         return new_embeddings
     
     def topic_loss_fct(self,labels,tx_vector):
-        print("Tx vector: ",tx_vector.size())
-        print("labels: ",labels.size())
-        one_hot_mask_true = torch.zeros((labels.size(0),self.config.vocab_size))
-        one_hot_mask_true[labels.detach()] = 1
+        # print("Tx vector: ",tx_vector.size())
+        # print("labels: ",labels.size())
+        # one_hot_mask_true = torch.zeros((labels.size(0),self.config.vocab_size))
+        one_hot_mask_true = F.one_hot(y, num_classes=self.config.vocab_size)
+        one_hot_mask_true = torch.sum(one_hot_mask_true, dim=1)
+        one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
 
-        one_hot_mask_false = torch.logical_not(one_hot_mask_true)
-        one_hot_mask_false = one_hot_mask_false.float() 
+        # one_hot_mask_true[labels.detach()] = 1
+
+        # one_hot_mask_false = torch.logical_not(one_hot_mask_true)
+        # one_hot_mask_false = one_hot_mask_false.float() 
         tx_vector_masked_true_values = one_hot_mask_true * tx_vector
         tx_vector_masked_false_values = one_hot_mask_false * tx_vector
         loss = (-1)*torch.mean(torch.log(F.sigmoid(tx_vector_masked_true_values)) + torch.log(1-F.sigmoid(tx_vector_masked_false_labels)))
