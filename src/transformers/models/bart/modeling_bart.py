@@ -1425,7 +1425,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # print("Tx vector: ",tx_vector.size())
         # print("labels: ",labels.size())
         # one_hot_mask_true = torch.zeros((labels.size(0),self.config.vocab_size))
-        one_hot_mask_true = F.one_hot(y, num_classes=self.config.vocab_size)
+        one_hot_mask_true = F.one_hot(labels, num_classes=self.config.vocab_size)
         one_hot_mask_true = torch.sum(one_hot_mask_true, dim=1)
         one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
 
