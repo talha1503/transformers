@@ -369,7 +369,6 @@ def main():
     ).to(device)
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     params = sum([np.prod(p.size()) for p in model_parameters])
-    print("TOTAL PARAMS: ",params)
     model.resize_token_embeddings(len(tokenizer))
 
     if model.config.decoder_start_token_id is None:

@@ -1238,7 +1238,6 @@ class Trainer:
 
         # tr_loss is a tensor to avoid synchronization of TPUs through .item()
         tr_loss = torch.tensor(0.0).to(args.device)
-        print("TR LOSS DEVICE: ",tr_loss.device)
         # _total_loss_scalar is updated everytime .item() has to be called on tr_loss and stores the sum of all losses
         self._total_loss_scalar = 0.0
         self._globalstep_last_logged = self.state.global_step
@@ -1822,7 +1821,6 @@ class Trainer:
 
         if self.args.gradient_accumulation_steps > 1 and not self.deepspeed:
             # deepspeed handles loss scaling by gradient_accumulation_steps in its `backward`
-            print("Not using deepspeed")
             loss = loss / self.args.gradient_accumulation_steps
 
         if self.use_amp:
@@ -1859,7 +1857,6 @@ class Trainer:
         else:
             # We don't use .loss here since the model may return tuples instead of ModelOutput.
             loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-            print(loss.device)
         return (loss, outputs) if return_outputs else loss
 
     def is_local_process_zero(self) -> bool:
@@ -2372,7 +2369,6 @@ class Trainer:
             return tensor
         # Gather all sizes
         size = torch.tensor(tensor.shape, device=tensor.device)[None]
-        print("SIZE TENSOR DEVICE: ",size.device)
         sizes = self._nested_gather(size).cpu()
 
         max_size = max(s[1] for s in sizes)
