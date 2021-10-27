@@ -990,7 +990,8 @@ class BartDecoder(BartPretrainedModel):
             attention_mask, input_shape, inputs_embeds, past_key_values_length
         )
 
-        bsz, trg_seq_len = attention_mask.size(0),attention_mask.size(2)
+        # bsz, trg_seq_len = attention_mask.size(0),attention_mask.size(2)
+        bsz, trg_seq_len = input_ids.shape(0),input_ids.shape(1)
 
         # expand encoder attention mask
         if encoder_hidden_states is not None and encoder_attention_mask is not None:
