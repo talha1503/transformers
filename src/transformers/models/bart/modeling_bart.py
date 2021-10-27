@@ -991,7 +991,7 @@ class BartDecoder(BartPretrainedModel):
         )
 
         # bsz, trg_seq_len = attention_mask.size(0),attention_mask.size(2)
-        bsz, trg_seq_len = input_ids.shape(0),input_ids.shape(1)
+        bsz, trg_seq_len = input_ids.size(0),input_ids.size(1)
 
         # expand encoder attention mask
         if encoder_hidden_states is not None and encoder_attention_mask is not None:
@@ -1375,6 +1375,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         final_distribution = lm_logits + outputs.focus_bias_vector
 
         masked_lm_loss = None
+        final_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             # Changes made here
