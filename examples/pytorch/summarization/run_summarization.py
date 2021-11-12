@@ -550,7 +550,7 @@ def main():
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
         
-        bertscore_results = bert_metric.compute(predictions=decoded_preds,references=decoded_labels,use_stemmer=True,model_type='bert-base-uncased')
+        bertscore_results = bert_metric.compute(predictions=decoded_preds,references=decoded_labels,model_type='bert-base-uncased')
         # print("Bertscore res")
         # print(bertscore_results)
         keys = ['precision','recall','f1']
