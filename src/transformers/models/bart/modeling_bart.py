@@ -80,14 +80,14 @@ def _make_causal_mask(input_ids_shape: torch.Size, dtype: torch.dtype, past_key_
     Make causal mask used for bi-directional self-attention.
     """
     bsz, tgt_len = input_ids_shape
-    mask = torch.full((tgt_len, tgt_len), float("-inf"),device=torch.device('cuda:0'))
-    mask_cond = torch.arange(mask.size(-1),device=torch.device('cuda:0'))
+    mask = torch.full((tgt_len, tgt_len), float("-inf"),device=torch.device('cuda'))
+    mask_cond = torch.arange(mask.size(-1),device=torch.device('cuda'))
     mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
     mask = mask.to(dtype)
-    mask = mask.to(torch.device('cuda:0'))
+    mask = mask.to(torch.device('cuda'))
 
     if past_key_values_length > 0:
-        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype,device=torch.device('cuda:0')), mask], dim=-1)
+        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype,device=torch.device('cuda')), mask], dim=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
@@ -98,7 +98,7 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] 
     bsz, src_len = mask.size()
     tgt_len = tgt_len if tgt_len is not None else src_len
 
-    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype).to(torch.device('cuda:0'))
+    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype).to(torch.device('cuda'))
 
     inverted_mask = 1.0 - expanded_mask
 
@@ -1117,7 +1117,7 @@ class BartFame(nn.Module):
         self.fc2 = nn.Linear(3072,768)
         self.embedding_layer = embedding_layer
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.embedding_layer_weights = self.embedding_layer.weight.detach().T.to(torch.device('cuda:0'))
+        self.embedding_layer_weights = self.embedding_layer.weight.detach().T.to(torch.device('cuda'))
 
     def forward(self,encoder_outputs):
         fc1_output = self.fc1(encoder_outputs)
@@ -1269,7 +1269,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
     def __init__(self, config: BartConfig):
         super().__init__(config)
         self.model = BartModel(config)
-        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings),device=torch.device("cuda:0")))
+        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings),device=torch.device("cuda")))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         self.init_weights()
 
@@ -1296,7 +1296,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # one_hot_mask_false = one_hot_mask_false.float() 
         tx_vector_masked_true_values = one_hot_mask_true * tx_vector
         tx_vector_masked_false_values = one_hot_mask_false * tx_vector
-        loss = (-1)*torch.mean(torch.log(F.sigmoid(tx_vector_masked_true_values)) + torch.log(1-F.sigmoid(tx_vector_masked_false_labels)))
+        loss = (-1)*torch.mean(torch.log(F.sigmoid(tx_vector_masked_true_values)) + torch.log(1-F.sigmoid(tx_vector_masked_false_values)))
         return loss
 
     def _resize_final_logits_bias(self, new_num_tokens: int) -> None:
