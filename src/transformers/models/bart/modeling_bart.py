@@ -1289,9 +1289,12 @@ class BartForConditionalGeneration(BartPretrainedModel):
         # one_hot_mask_true = F.one_hot(labels, num_classes=self.config.vocab_size)
         # one_hot_mask_true = torch.sum(one_hot_mask_true, dim=1)
         # one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
-        
-        one_hot_mask_true = torch.zeros(labels.size(0),self.config.vocab_size,device = torch.device('cuda'))
-        one_hot_mask_true.scatter_(1,labels,1)
+        one_hot_mask_true = torch.zeros([labels.size(0), self.config.vocab_size],device = torch.device('cuda'))
+        x = torch.arange(labels.size(0),device = torch.device('cuda')).unsqueeze(1).expand_as(labels).reshape(-1)
+        one_hot_mask_true.index_put_((x, labels.reshape(-1)), torch.ones(labels.numel(),device=torch.device('cuda')))
+
+        # one_hot_mask_true = torch.zeros(labels.size(0),self.config.vocab_size,device = torch.device('cuda'))
+        # one_hot_mask_true.scatter_(1,labels,1)
         one_hot_mask_true = one_hot_mask_true.long()
         one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
         # one_hot_mask_true[labels.detach()] = 1
