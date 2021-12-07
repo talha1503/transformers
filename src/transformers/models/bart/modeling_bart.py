@@ -1285,7 +1285,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         return new_embeddings
     
     def topic_loss_fct(self,labels,tx_vector):
-        one_hot_mask_true = torch.zeros([labels.size(0), self.config.vocab_size])
+        one_hot_mask_true = torch.zeros([labels.size(0), self.config.vocab_size],device=torch.device('cuda'))
         x = torch.arange(labels.size(0)).unsqueeze(1).expand_as(labels).reshape(-1)
         one_hot_mask_true.index_put_((x, labels.reshape(-1)), torch.ones(labels.numel()))
         
