@@ -1284,26 +1284,25 @@ class BartForConditionalGeneration(BartPretrainedModel):
         self._resize_final_logits_bias(new_num_tokens)
         return new_embeddings
     
-    def topic_loss_fct(self,labels,tx_vector):
-        # one_hot_mask_true = torch.zeros((labels.size(0),self.config.vocab_size))
-        # one_hot_mask_true = F.one_hot(labels, num_classes=self.config.vocab_size)
-        # one_hot_mask_true = torch.sum(one_hot_mask_true, dim=1)
-        # one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
-        one_hot_mask_true = torch.zeros([labels.size(0), self.config.vocab_size],device = torch.device('cuda'))
-        x = torch.arange(labels.size(0),device = torch.device('cuda')).unsqueeze(1).expand_as(labels).reshape(-1)
-        one_hot_mask_true.index_put_((x, labels.reshape(-1)), torch.ones(labels.numel(),device=torch.device('cuda')))
-
-        # one_hot_mask_true = torch.zeros(labels.size(0),self.config.vocab_size,device = torch.device('cuda'))
-        # one_hot_mask_true.scatter_(1,labels,1)
+    def topic_loss_fct(labels,tx_vector):
+        one_hot_mask_true = torch.zeros([labels.size(0), vocab_size])
+        x = torch.arange(labels.size(0)).unsqueeze(1).expand_as(labels).reshape(-1)
+        one_hot_mask_true.index_put_((x, labels.reshape(-1)), torch.ones(labels.numel()))
+        
         one_hot_mask_true = one_hot_mask_true.long()
         one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
-        # one_hot_mask_true[labels.detach()] = 1
+        
+        tx_vector_masked_true_values = tx_vector_masked_true_values.flatten()
+        tx_vector_masked_true_values = tx_vector_masked_true_values[tx_vector_masked_true_values.nonzero().detach()].reshape(-1) 
 
-        # one_hot_mask_false = torch.logical_not(one_hot_mask_true)
-        # one_hot_mask_false = one_hot_mask_false.float() 
-        tx_vector_masked_true_values = one_hot_mask_true * tx_vector
-        tx_vector_masked_false_values = one_hot_mask_false * tx_vector
-        loss = (-1)*torch.mean(torch.log(F.sigmoid(tx_vector_masked_true_values)) + torch.log(1-F.sigmoid(tx_vector_masked_false_values)))
+        tx_vector_masked_false_values = tx_vector_masked_false_values.flatten()
+        tx_vector_masked_false_values = tx_vector_masked_false_values[tx_vector_masked_false_values.nonzero().detach()].reshape(-1)
+
+        new_pos = torch.sum(torch.log(F.sigmoid(tx_vector_masked_true_values)))
+        new_neg = torch.sum(torch.log(1-F.sigmoid(tx_vector_masked_false_values)))
+
+        loss = (-1)*(new_pos + new_neg)
+        loss /= (vocab_size * labels.size(0))
         return loss
 
     def _resize_final_logits_bias(self, new_num_tokens: int) -> None:
@@ -1377,7 +1376,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        # bs, target_legnth, vocab_size, 
+
         lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
         final_distribution = lm_logits + outputs.focus_bias_vector
 
@@ -1385,15 +1384,12 @@ class BartForConditionalGeneration(BartPretrainedModel):
         final_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            # Changes made here
-            # topic_loss = topic_loss_fct(outputs.tx_vector,labels.view(-1))
-            masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1)) # Changes made here
-            topic_loss = self.topic_loss_fct(labels,outputs.tx_vector) # Changes made here
-            # final_loss = 0.5*masked_lm_loss + 0.5 * topic_loss # Changes made here
+            masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1))
+            topic_loss = self.topic_loss_fct(labels,outputs.tx_vector)
             final_loss = 0.5*masked_lm_loss + 0.5*topic_loss
         
         if not return_dict:
-            output = (final_distribution,) + outputs[1:] # Changes made here
+            output = (final_distribution,) + outputs[1:]
             return ((final_loss,) + output) if final_loss is not None else output
 
         return Seq2SeqLMOutput(
@@ -1407,29 +1403,6 @@ class BartForConditionalGeneration(BartPretrainedModel):
             encoder_hidden_states=outputs.encoder_hidden_states,
             encoder_attentions=outputs.encoder_attentions,
         )
-
-
-        # masked_lm_loss = None
-        # if labels is not None:
-        #     loss_fct = CrossEntropyLoss()
-        #     masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
-
-        
-        # if not return_dict:
-        #     output = (lm_logits,) + outputs[1:]
-        #     return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
-
-        # return Seq2SeqLMOutput(
-        #     loss=masked_lm_loss,
-        #     logits=lm_logits,
-        #     past_key_values=outputs.past_key_values,
-        #     decoder_hidden_states=outputs.decoder_hidden_states,
-        #     decoder_attentions=outputs.decoder_attentions,
-        #     cross_attentions=outputs.cross_attentions,
-        #     encoder_last_hidden_state=outputs.encoder_last_hidden_state,
-        #     encoder_hidden_states=outputs.encoder_hidden_states,
-        #     encoder_attentions=outputs.encoder_attentions,
-        # )
 
     def prepare_inputs_for_generation(
         self,
