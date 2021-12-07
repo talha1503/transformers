@@ -1292,6 +1292,9 @@ class BartForConditionalGeneration(BartPretrainedModel):
         one_hot_mask_true = one_hot_mask_true.long()
         one_hot_mask_false = torch.logical_not(one_hot_mask_true).long()
         
+        tx_vector_masked_true_values = one_hot_mask_true * tx_vector
+        tx_vector_masked_false_values = one_hot_mask_false * tx_vector
+
         tx_vector_masked_true_values = tx_vector_masked_true_values.flatten()
         tx_vector_masked_true_values = tx_vector_masked_true_values[tx_vector_masked_true_values.nonzero().detach()].reshape(-1) 
 
