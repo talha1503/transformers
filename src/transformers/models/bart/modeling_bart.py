@@ -1284,7 +1284,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         self._resize_final_logits_bias(new_num_tokens)
         return new_embeddings
     
-    def topic_loss_fct(labels,tx_vector):
+    def topic_loss_fct(self,labels,tx_vector):
         one_hot_mask_true = torch.zeros([labels.size(0), vocab_size])
         x = torch.arange(labels.size(0)).unsqueeze(1).expand_as(labels).reshape(-1)
         one_hot_mask_true.index_put_((x, labels.reshape(-1)), torch.ones(labels.numel()))
