@@ -1285,7 +1285,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         return new_embeddings
     
     def topic_loss_fct(self,labels,tx_vector):
-        one_hot_mask_true = torch.zeros([labels.size(0), vocab_size])
+        one_hot_mask_true = torch.zeros([labels.size(0), self.config.vocab_size])
         x = torch.arange(labels.size(0)).unsqueeze(1).expand_as(labels).reshape(-1)
         one_hot_mask_true.index_put_((x, labels.reshape(-1)), torch.ones(labels.numel()))
         
@@ -1302,7 +1302,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         new_neg = torch.sum(torch.log(1-F.sigmoid(tx_vector_masked_false_values)))
 
         loss = (-1)*(new_pos + new_neg)
-        loss /= (vocab_size * labels.size(0))
+        loss /= (self.config.vocab_size * labels.size(0))
         return loss
 
     def _resize_final_logits_bias(self, new_num_tokens: int) -> None:
