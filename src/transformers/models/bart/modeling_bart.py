@@ -1389,6 +1389,8 @@ class BartForConditionalGeneration(BartPretrainedModel):
             loss_fct = CrossEntropyLoss()
             masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1))
             topic_loss = self.topic_loss_fct(labels,outputs.tx_vector)
+            print("TOPIC LOSS: ",topic_loss)
+            print("CROSS ENTROPY LOSS: ",masked_lm_loss)
             final_loss = 0.5*masked_lm_loss + 0.5*topic_loss
         
         if not return_dict:
