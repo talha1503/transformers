@@ -1389,8 +1389,6 @@ class BartForConditionalGeneration(BartPretrainedModel):
             loss_fct = CrossEntropyLoss()
             masked_lm_loss = loss_fct(final_distribution.view(-1, self.config.vocab_size), labels.view(-1))
             topic_loss = self.topic_loss_fct(labels,outputs.tx_vector)
-            print("TOPIC LOSS: ",topic_loss)
-            print("CROSS ENTROPY LOSS: ",masked_lm_loss)
             final_loss = 0.5*masked_lm_loss + 0.5*topic_loss
         
         if not return_dict:
@@ -1893,4 +1891,4 @@ class BartForCausalLM(BartPretrainedModel):
         reordered_past = ()
         for layer_past in past:
             reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
-        return reordered_past   
+        return reordered_past
