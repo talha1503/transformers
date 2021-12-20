@@ -1294,7 +1294,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         
         tx_vector_masked_true_values = one_hot_mask_true * tx_vector
         tx_vector_masked_false_values = one_hot_mask_false * tx_vector
-
+        print("TX VECTOR TRUE: ",tx_vector_masked_true_values.grad)
         tx_vector_masked_true_values = tx_vector_masked_true_values.flatten()
         tx_vector_masked_true_values = tx_vector_masked_true_values[tx_vector_masked_true_values.nonzero().detach()].reshape(-1) 
 
