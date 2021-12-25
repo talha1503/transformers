@@ -1307,7 +1307,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
 
         loss = (-1)*(new_pos + new_neg)
         loss /= (self.config.vocab_size * labels.size(0))
-        return loss,tx_vector_masked_true_values
+        return loss
 
     def _resize_final_logits_bias(self, new_num_tokens: int) -> None:
         old_num_tokens = self.final_logits_bias.shape[-1]
