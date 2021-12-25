@@ -1294,19 +1294,20 @@ class BartForConditionalGeneration(BartPretrainedModel):
         
         tx_vector_masked_true_values = one_hot_mask_true * tx_vector
         tx_vector_masked_false_values = one_hot_mask_false * tx_vector
-        print("TX VECTOR TRUE: ",tx_vector_masked_true_values.grad)
+        
+        print("GRAD HAI? : ",tx_vector.grad)
         tx_vector_masked_true_values = tx_vector_masked_true_values.flatten()
-        tx_vector_masked_true_values = tx_vector_masked_true_values[tx_vector_masked_true_values.nonzero().detach()].reshape(-1) 
+        tx_vector_masked_true_values = tx_vector_masked_true_values[tx_vector_masked_true_values.nonzero()].reshape(-1) 
 
         tx_vector_masked_false_values = tx_vector_masked_false_values.flatten()
-        tx_vector_masked_false_values = tx_vector_masked_false_values[tx_vector_masked_false_values.nonzero().detach()].reshape(-1)
+        tx_vector_masked_false_values = tx_vector_masked_false_values[tx_vector_masked_false_values.nonzero()].reshape(-1)
 
         new_pos = torch.sum(torch.log(F.sigmoid(tx_vector_masked_true_values)))
         new_neg = torch.sum(torch.log(1-F.sigmoid(tx_vector_masked_false_values)))
 
         loss = (-1)*(new_pos + new_neg)
         loss /= (self.config.vocab_size * labels.size(0))
-        return loss
+        return loss,tx_vector_masked_true_values
 
     def _resize_final_logits_bias(self, new_num_tokens: int) -> None:
         old_num_tokens = self.final_logits_bias.shape[-1]
@@ -1404,7 +1405,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
             cross_attentions=outputs.cross_attentions,
             encoder_last_hidden_state=outputs.encoder_last_hidden_state,
             encoder_hidden_states=outputs.encoder_hidden_states,
-            encoder_attentions=outputs.encoder_attentions,
+            encoder_attentions=outputs.encoder_attentions
         )
 
     def prepare_inputs_for_generation(
