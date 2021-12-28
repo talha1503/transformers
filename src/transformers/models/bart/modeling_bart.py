@@ -1117,7 +1117,7 @@ class BartFame(nn.Module):
         self.fc2 = nn.Linear(3072,768)
         self.embedding_layer = embedding_layer
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.embedding_layer_weights = self.embedding_layer.weight.T.to(torch.device('cuda'))
+        self.embedding_layer_weights = self.embedding_layer.weight.detach().T.to(torch.device('cuda'))
 
     def forward(self,encoder_outputs):
         fc1_output = self.fc1(encoder_outputs)
@@ -1224,6 +1224,7 @@ class BartModel(BartPretrainedModel):
                 attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
             )
         # Changes made here
+        print("Encoder hidden state GRAD: ",encoder_outputs.last_hidden_state.grad)
         fame_vector,tx_vector = self.fame(encoder_outputs.last_hidden_state)
         src_len = encoder_outputs.src_len
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
