@@ -1117,7 +1117,7 @@ class BartFame(nn.Module):
         self.fc2 = nn.Linear(3072,768)
         self.embedding_layer = embedding_layer
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.embedding_layer_weights = self.embedding_layer.weight.detach().T.to(torch.device('cuda'))
+        self.embedding_layer_weights = self.embedding_layer.weight.T.to(torch.device('cuda'))
 
     def forward(self,encoder_outputs):
         fc1_output = self.fc1(encoder_outputs)
@@ -1126,6 +1126,8 @@ class BartFame(nn.Module):
         # random_v = torch.rand(self.embedding_layer_weights.size(),device=torch.device('cuda:0'))
         t_vector = torch.matmul(fc2_output,self.embedding_layer_weights)
         tx = torch.mean(t_vector,1)
+        print("FC1 Grad: ",self.fc1.grad)
+        print("FC2 Grad: ",self.fc2.grad)
         return t_vector, tx
 
 @add_start_docstrings(
@@ -1295,7 +1297,6 @@ class BartForConditionalGeneration(BartPretrainedModel):
         tx_vector_masked_true_values = one_hot_mask_true * tx_vector
         tx_vector_masked_false_values = one_hot_mask_false * tx_vector
         
-        print("GRAD HAI? : ",tx_vector.grad)
         tx_vector_masked_true_values = tx_vector_masked_true_values.flatten()
         tx_vector_masked_true_values = tx_vector_masked_true_values[tx_vector_masked_true_values.nonzero()].reshape(-1) 
 
@@ -1313,7 +1314,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
         old_num_tokens = self.final_logits_bias.shape[-1]
         if new_num_tokens <= old_num_tokens:
             new_bias = self.final_logits_bias[:, :new_num_tokens]
-        else:
+        else:  
             extra_bias = torch.zeros((1, new_num_tokens - old_num_tokens), device=self.final_logits_bias.device)
             new_bias = torch.cat([self.final_logits_bias, extra_bias], dim=1)
         self.register_buffer("final_logits_bias", new_bias)
