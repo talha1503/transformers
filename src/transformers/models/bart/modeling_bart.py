@@ -1126,8 +1126,8 @@ class BartFame(nn.Module):
         # random_v = torch.rand(self.embedding_layer_weights.size(),device=torch.device('cuda:0'))
         t_vector = torch.matmul(fc2_output,self.embedding_layer_weights)
         tx = torch.mean(t_vector,1)
-        print("FC1 Grad: ",self.fc1.grad)
-        print("FC2 Grad: ",self.fc2.grad)
+        print("FC1 Grad: ",self.fc1.weight.grad)
+        print("FC2 Grad: ",self.fc2.weight.grad)
         return t_vector, tx
 
 @add_start_docstrings(
